@@ -1,0 +1,137 @@
+{% extends "base_app.html" %}
+{% block title %}Leaves{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Leave Management</h1><p>Review leave requests and see who is away</p></div>
+  {% if tab == 'list' %}<div class="head-tools">
+    <a class="btn-blue lg" href="{{ url_for('admin_leaves_export', **args) }}"><i class="bi bi-download"></i> Export</a>
+  </div>{% endif %}
+</div>
+
+<section class="mini-grid five">
+  <div class="mini"><i class="bi bi-calendar2-range"></i><div><small>Total Requests</small><b>{{ summary.total }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-hourglass-split"></i><div><small>Pending</small><b>{{ summary.pending }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-calendar2-check"></i><div><small>Approved</small><b>{{ summary.approved }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-calendar2-x"></i><div><small>Rejected</small><b>{{ summary.rejected }}</b></div></div>
+  <div class="mini m-purple"><i class="bi bi-person-walking"></i><div><small>On Leave Today</small><b>{{ summary.today }}</b></div></div>
+</section>
+
+<div class="tabs">
+  {% for label, key, n in tabs %}
+  <a class="tab {{ 'active' if tab == 'list' and status == key }}" href="{{ url_for('admin_leaves', **(dict(args_no_status, status=key) if key else args_no_status)) }}">{{ label }}<span>{{ n }}</span></a>
+  {% endfor %}
+  <a class="tab {{ 'active' if tab == 'calendar' }}" href="{{ url_for('admin_leaves', tab='calendar', **cal_args) }}"><i class="bi bi-calendar3"></i> Team Calendar</a>
+</div>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_leaves') }}">
+    {% if tab == 'calendar' %}<input type="hidden" name="tab" value="calendar"><input type="hidden" name="month" value="{{ month }}">
+    {% elif status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search name, ID or reason..." aria-label="Search leave requests"></div>
+    <label class="f-item">Employee
+      <select name="employee" class="form-select" data-autosubmit><option value="">All</option>
+        {% for e in employees %}<option value="{{ e.id }}" {{ 'selected' if e.id == emp }}>{{ e.full_name }}{% if not e.is_active %} (inactive){% endif %}</option>{% endfor %}</select></label>
+    <label class="f-item">Department
+      <select name="department" class="form-select" data-autosubmit><option value="">All</option>
+        {% for x in departments %}<option {{ 'selected' if x == dept }}>{{ x }}</option>{% endfor %}</select></label>
+    {% if tab == 'list' %}
+    <label class="f-item">From <input type="date" name="from" value="{{ d_from }}" class="form-control" data-autosubmit></label>
+    <label class="f-item">To <input type="date" name="to" value="{{ d_to }}" class="form-control" data-autosubmit></label>
+    {% endif %}
+    {% if is_filtered %}<a class="link-sm" href="{{ url_for('admin_leaves', tab='calendar', month=month) if tab == 'calendar' else url_for('admin_leaves') }}"><i class="bi bi-x-circle"></i> Reset</a>{% endif %}
+  </form>
+
+  {% if tab == 'list' %}
+  <div class="table-wrap">
+    <table class="ts-table lv-table">
+      <thead><tr><th>#</th><th>Employee</th><th>Department</th><th>Leave Period</th><th class="num">Days</th><th>Reason</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for l in leaves %}
+        <tr class="{{ 'row-off' if not l.active }}">
+          <td>{{ offset + loop.index }}</td>
+          <td><span class="who"><span class="av" style="background: {{ l.color }}">{{ l.initials }}</span>
+            <span>{{ l.name }}<small class="emp-sub">{{ l.code }}</small></span></span></td>
+          <td>{{ l.dept }}</td>
+          <td class="nowrap">{{ l.period }}{% if l.when %}<small class="emp-sub">{{ l.when }}</small>{% endif %}</td>
+          <td class="num"><b>{{ l.days }}</b></td>
+          <td class="lv-reason">{{ l.reason }}
+            {% if l.note %}<small class="d-block text-muted"><i class="bi bi-chat-left-text"></i> {{ l.note }}</small>{% endif %}
+            {% if l.overlap %}<small class="d-block warn"><i class="bi bi-people"></i> {{ l.overlap }} teammate{{ '' if l.overlap == 1 else 's' }} in {{ l.dept }} also on leave then</small>{% endif %}</td>
+          <td><span class="chip s-{{ l.status|lower }}">{{ l.status }}</span></td>
+          <td class="num nowrap">
+            {% if l.status == 'Pending' %}
+            <form method="post" action="{{ url_for('admin_leave_review') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+              <input type="hidden" name="leave_id" value="{{ l.id }}"><input type="hidden" name="decision" value="approve">
+              <button class="act ok" type="submit" title="Approve" aria-label="Approve leave for {{ l.name }}"><i class="bi bi-check-lg"></i></button></form>
+            <button type="button" class="act danger reject-leave" title="Reject" aria-label="Reject leave for {{ l.name }}"
+              data-id="{{ l.id }}" data-name="{{ l.name }}" data-period="{{ l.period }}"><i class="bi bi-x-lg"></i></button>
+            {% elif l.can_revoke %}
+            <button type="button" class="act danger reject-leave" title="Revoke approval" aria-label="Revoke approved leave for {{ l.name }}"
+              data-id="{{ l.id }}" data-name="{{ l.name }}" data-period="{{ l.period }}" data-revoke="1"><i class="bi bi-arrow-counterclockwise"></i></button>
+            {% else %}<span class="act locked" title="No further action"><i class="bi bi-lock"></i></span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty-cell"><i class="bi bi-calendar2-x d-block fs-3 mb-1"></i>No leave requests found{% if is_filtered %} for these filters{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Leave pages"><span class="text-muted small">Page {{ page }} of {{ pages }} · {{ total }} requests</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_leaves', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for n in range(1, pages + 1) %}<a class="pg {{ 'active' if n == page }}" href="{{ url_for('admin_leaves', page=n, **args) }}">{{ n }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_leaves', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+
+  {% else %}
+  <div class="panel-head">
+    <h2>{{ month_label }}</h2>
+    <div class="cal-nav">
+      <a class="pg" href="{{ url_for('admin_leaves', tab='calendar', month=prev_month, **cal_args) }}" aria-label="Previous month"><i class="bi bi-chevron-left"></i></a>
+      <a class="pg" href="{{ url_for('admin_leaves', tab='calendar', month=this_month, **cal_args) }}">Today</a>
+      <a class="pg" href="{{ url_for('admin_leaves', tab='calendar', month=next_month, **cal_args) }}" aria-label="Next month"><i class="bi bi-chevron-right"></i></a>
+    </div>
+  </div>
+  <div class="cal admin-cal">
+    {% for h in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<div class="cal-h">{{ h }}</div>{% endfor %}
+    {% for w in weeks %}{% for c in w %}
+      <div class="cal-c {{ 'out' if not c.in_month }} {{ 'wk' if c.weekend }} {{ 'now' if c.today }}">
+        <span class="n">{{ c.date.day }}</span>
+        {% for i in c['items'] %}<span class="lv lv-{{ i.status }}" title="{{ i.name }} · {{ i.status|capitalize }}">{{ i.short }}</span>{% endfor %}
+        {% if c.more %}<span class="lv-more">+{{ c.more }} more</span>{% endif %}
+      </div>
+    {% endfor %}{% endfor %}
+  </div>
+  <div class="cal-legend"><span><i class="lv lv-approved"></i> Approved</span><span><i class="lv lv-pending"></i> Pending</span></div>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="leaveModal" tabindex="-1" aria-labelledby="leaveTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('admin_leave_review') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+      <input type="hidden" name="leave_id" value="">
+      <input type="hidden" name="decision" value="reject">
+      <div class="modal-header"><h5 class="modal-title" id="leaveTitle">Reject leave request</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="review-sum"><b class="lv-who"></b><span class="lv-when"></span></div>
+        <label class="form-label mt-3" for="l_note">Reason <span class="text-muted">(sent to the employee)</span></label>
+        <textarea class="form-control" id="l_note" name="note" rows="3" minlength="3" maxlength="255" required></textarea>
+        <div class="form-text" id="leaveHint">The employee is notified and can apply again.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-red" data-once><i class="bi bi-x-circle"></i> <span class="lv-btn">Reject</span></button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

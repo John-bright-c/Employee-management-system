@@ -1,0 +1,106 @@
+{% extends "base_app.html" %}
+{% block title %}Timesheets{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Timesheet Management</h1><p>Review, approve and reject employee working hours</p></div>
+  <div class="head-tools">
+    <a class="btn-blue lg" href="{{ url_for('admin_timesheets_export', **args) }}"><i class="bi bi-download"></i> Export</a>
+  </div>
+</div>
+
+<section class="mini-grid five">
+  <div class="mini"><i class="bi bi-clock-history"></i><div><small>Total Hours</small><b>{{ summary.hours }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-hourglass-split"></i><div><small>Pending Review</small><b>{{ summary.pending }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-patch-check"></i><div><small>Approved</small><b>{{ summary.approved }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-x-octagon"></i><div><small>Rejected</small><b>{{ summary.rejected }}</b></div></div>
+  <div class="mini m-purple"><i class="bi bi-people"></i><div><small>Employees Logged</small><b>{{ summary.people }}</b></div></div>
+</section>
+
+<div class="tabs">
+  {% for label, key, n in tabs %}
+  <a class="tab {{ 'active' if status == key }}" href="{{ url_for('admin_timesheets', **(dict(args_no_status, status=key) if key else args_no_status)) }}">{{ label }}<span>{{ n }}</span></a>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_timesheets') }}">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search name, ID or task..." aria-label="Search timesheets"></div>
+    <label class="f-item">Employee
+      <select name="employee" class="form-select" data-autosubmit><option value="">All</option>
+        {% for e in employees %}<option value="{{ e.id }}" {{ 'selected' if e.id == emp }}>{{ e.full_name }}{% if not e.is_active %} (inactive){% endif %}</option>{% endfor %}</select></label>
+    <label class="f-item">Department
+      <select name="department" class="form-select" data-autosubmit><option value="">All</option>
+        {% for x in departments %}<option {{ 'selected' if x == dept }}>{{ x }}</option>{% endfor %}</select></label>
+    <label class="f-item">From <input type="date" name="from" value="{{ d_from }}" class="form-control" data-autosubmit></label>
+    <label class="f-item">To <input type="date" name="to" value="{{ d_to }}" class="form-control" data-autosubmit></label>
+    {% if is_filtered %}<a class="link-sm" href="{{ url_for('admin_timesheets') }}"><i class="bi bi-x-circle"></i> Reset</a>{% endif %}
+  </form>
+
+  <form id="bulkForm" class="bulk-bar" method="post" action="{{ url_for('admin_timesheet_review') }}" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+    <span><b id="selCount">0</b> selected</span>
+    <button type="button" class="link-sm" id="selClear">Clear</button>
+    <div class="bulk-actions">
+      <button class="btn-green" type="submit" name="decision" value="approve"><i class="bi bi-check2-circle"></i> Approve</button>
+      <button class="btn-red" type="submit" name="decision" value="reject"><i class="bi bi-x-circle"></i> Reject</button>
+    </div>
+  </form>
+
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr>
+        <th class="sel">{% if entries %}<input class="form-check-input" type="checkbox" id="selAll" aria-label="Select all entries on this page">{% endif %}</th>
+        <th>Employee</th><th>Department</th><th>Date</th><th>Task</th><th>Time</th><th class="num">Hours</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr class="{{ 'row-off' if not e.active }}">
+          <td class="sel"><input class="form-check-input row-sel" type="checkbox" name="ids" value="{{ e.id }}" form="bulkForm" aria-label="Select entry by {{ e.name }} on {{ e.date.strftime('%d %b %Y') }}"></td>
+          <td><span class="who"><span class="av" style="background: {{ e.color }}">{{ e.initials }}</span>
+            <span>{{ e.name }}<small class="emp-sub">{{ e.code }}</small></span></span></td>
+          <td>{{ e.dept }}</td>
+          <td class="nowrap">{{ e.date.strftime('%d %b %Y') }}</td>
+          <td class="ts-task">{{ e.task }}</td>
+          <td class="nowrap">{{ e.start }} – {{ e.end }}</td>
+          <td class="num"><b>{{ e.hours }}</b></td>
+          <td><span class="chip s-{{ e.status|lower }}">{{ e.status }}</span></td>
+          <td class="num nowrap">
+            {% if e.status != 'Approved' %}
+            <form method="post" action="{{ url_for('admin_timesheet_review') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+              <input type="hidden" name="ids" value="{{ e.id }}"><input type="hidden" name="decision" value="approve">
+              <button class="act ok" type="submit" title="Approve" aria-label="Approve entry by {{ e.name }} on {{ e.date.strftime('%d %b %Y') }}"><i class="bi bi-check-lg"></i></button></form>
+            {% endif %}
+            {% if e.status != 'Rejected' %}
+            <form method="post" action="{{ url_for('admin_timesheet_review') }}" class="d-inline review-form"
+                  data-confirm="Reject {{ e.name }}'s entry for {{ e.date.strftime('%d %b %Y') }}? They will be notified and can edit and resubmit it.">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+              <input type="hidden" name="ids" value="{{ e.id }}"><input type="hidden" name="decision" value="reject">
+              <button class="act danger" type="submit" title="Reject" aria-label="Reject entry by {{ e.name }} on {{ e.date.strftime('%d %b %Y') }}"><i class="bi bi-x-lg"></i></button></form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="empty-cell"><i class="bi bi-clock d-block fs-3 mb-1"></i>No timesheet entries found{% if is_filtered %} for these filters{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if entries %}
+      <tfoot><tr><td colspan="6" class="num">Total Hours ({{ total }} entr{{ 'y' if total == 1 else 'ies' }})</td><td class="num"><b>{{ filtered_hours }}</b></td><td colspan="2"></td></tr></tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Timesheet pages"><span class="text-muted small">Page {{ page }} of {{ pages }} · {{ total }} entries</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_timesheets', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for n in range(1, pages + 1) %}<a class="pg {{ 'active' if n == page }}" href="{{ url_for('admin_timesheets', page=n, **args) }}">{{ n }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_timesheets', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

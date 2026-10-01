@@ -1,0 +1,166 @@
+{% extends "base_app.html" %}
+{% block title %}Payroll{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Payroll Management</h1><p>Manage salary, allowances and deductions</p></div>
+  {% if tab == 'payroll' %}
+  <div class="head-tools">
+    <form method="get" action="{{ url_for('admin_payroll') }}" class="month-nav">
+      {% for k in ['department','status','q'] if args.get(k) %}<input type="hidden" name="{{ k }}" value="{{ args[k] }}">{% endfor %}
+      <a class="pg" href="{{ url_for('admin_payroll', **dict(args, month=prev_month)) }}" aria-label="Previous month"><i class="bi bi-chevron-left"></i></a>
+      <label class="month-pick"><i class="bi bi-calendar3"></i><span>{{ month_label }}</span>
+        <input type="month" name="month" value="{{ month_value }}" max="{{ max_month }}" data-autosubmit aria-label="Choose month"></label>
+      {% if next_month %}<a class="pg" href="{{ url_for('admin_payroll', **dict(args, month=next_month)) }}" aria-label="Next month"><i class="bi bi-chevron-right"></i></a>
+      {% else %}<span class="pg disabled"><i class="bi bi-chevron-right"></i></span>{% endif %}
+    </form>
+    <a class="btn-blue lg" href="{{ url_for('admin_payroll_export', **args) }}"><i class="bi bi-download"></i> Export</a>
+    <form method="post" action="{{ url_for('admin_payroll_generate') }}" class="d-inline pay-confirm"
+          data-confirm="Generate payroll for {{ month_label }}? Pending records are recalculated; paid records stay unchanged.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ month_value }}">
+      <button class="btn-blue lg" type="submit" data-once><i class="bi bi-gear"></i> Generate Payroll</button></form>
+  </div>
+  {% endif %}
+</div>
+
+{% if tab == 'payroll' %}
+<section class="mini-grid">
+  <div class="mini"><i class="bi bi-people"></i><div><small>Payroll Records</small><b>{{ summary.records }}</b></div></div>
+  <div class="mini"><i class="bi bi-cash-stack"></i><div><small>Total Net Payout</small><b>{{ summary.net|inr }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-check2-circle"></i><div><small>Paid ({{ summary.paid_n }})</small><b>{{ summary.paid|inr }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-hourglass-split"></i><div><small>Pending ({{ summary.pending_n }})</small><b>{{ summary.pending|inr }}</b></div></div>
+</section>
+{% if no_struct %}<div class="flash flash-warning pay-note"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ no_struct }} active employee{{ '' if no_struct == 1 else 's' }} {{ 'has' if no_struct == 1 else 'have' }} no salary set. <a href="{{ url_for('admin_payroll', tab='structure') }}">Set salaries</a></span></div>{% endif %}
+{% if not_generated %}<div class="flash flash-warning pay-note"><i class="bi bi-info-circle-fill"></i><span>{{ not_generated }} employee{{ '' if not_generated == 1 else 's' }} {{ 'has' if not_generated == 1 else 'have' }} no payroll for {{ month_label }} yet. Click <b>Generate Payroll</b>.{% if is_current %} Absences are counted up to yesterday, so regenerate before paying.{% endif %}</span></div>{% endif %}
+{% else %}
+<section class="mini-grid">
+  <div class="mini"><i class="bi bi-people"></i><div><small>Active Employees</small><b>{{ summary.total }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-person-check"></i><div><small>Salary Set</small><b>{{ summary.set_n }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-person-exclamation"></i><div><small>Not Set</small><b>{{ summary.not_set }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-cash-stack"></i><div><small>Est. Monthly Payout</small><b>{{ summary.est|inr }}</b></div></div>
+</section>
+{% endif %}
+
+<div class="tabs">
+  <a class="tab {{ 'active' if tab == 'payroll' }}" href="{{ url_for('admin_payroll', month=month_value) }}"><i class="bi bi-cash-stack"></i> Monthly Payroll</a>
+  <a class="tab {{ 'active' if tab == 'structure' }}" href="{{ url_for('admin_payroll', tab='structure') }}"><i class="bi bi-sliders"></i> Salary Structure</a>
+</div>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_payroll') }}">
+    {% if tab == 'structure' %}<input type="hidden" name="tab" value="structure">{% else %}<input type="hidden" name="month" value="{{ month_value }}">{% endif %}
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search name or ID..." aria-label="Search employees"></div>
+    <label class="f-item">Department
+      <select name="department" class="form-select" data-autosubmit><option value="">All</option>
+        {% for d in departments %}<option {{ 'selected' if d == dept }}>{{ d }}</option>{% endfor %}</select></label>
+    {% if tab == 'payroll' %}
+    <label class="f-item">Status
+      <select name="status" class="form-select" data-autosubmit><option value="">All</option>
+        {% for s in pay_statuses %}<option {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select></label>
+    {% endif %}
+    {% if q or dept or status %}<a class="link-sm" href="{{ url_for('admin_payroll', **({'month': month_value} if tab == 'payroll' else {'tab': 'structure'})) }}"><i class="bi bi-x-circle"></i> Clear</a>{% endif %}
+  </form>
+
+  {% if tab == 'payroll' %}
+  <form id="payBulk" class="bulk-bar" method="post" action="{{ url_for('admin_payroll_pay') }}" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}"><input type="hidden" name="action" value="pay">
+    <span><b id="payCount">0</b> selected</span>
+    <button class="btn-blue ok" type="submit" data-once><i class="bi bi-cash-coin"></i> Mark selected as paid</button>
+  </form>
+  <div class="table-wrap">
+    <table class="ts-table" id="payTable">
+      <thead><tr><th class="pay-chk">{% if items %}<input type="checkbox" id="paySelAll" aria-label="Select all pending records on this page">{% endif %}</th>
+        <th>#</th><th>Employee</th><th>Department</th><th class="num">Basic Salary</th><th class="num">Allowances</th><th class="num">Deductions</th><th class="num">Net Salary</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for p in items %}
+        <tr>
+          <td class="pay-chk">{% if p.status == 'Pending' %}<input type="checkbox" class="pay-row-chk" name="ids" value="{{ p.id }}" form="payBulk" aria-label="Select {{ p.full_name }}">{% endif %}</td>
+          <td>{{ offset + loop.index }}</td>
+          <td><span class="who"><span class="av" style="background: {{ p.color }}">{{ p.initials }}</span>
+            <span>{{ p.full_name }}<small class="emp-sub">{{ p.employee_code or '' }}</small></span></span></td>
+          <td>{{ p.department or '—' }}</td>
+          <td class="num money">{{ p.basic|inr }}</td><td class="num money">{{ p.allowances|inr }}</td>
+          <td class="num money">{{ p.total_ded|inr }}{% if p.lop_days %}<small class="emp-sub">incl. {{ p.lop_days }} day{{ '' if p.lop_days == 1 else 's' }} LOP</small>{% endif %}</td>
+          <td class="num money net-cell">{{ p.net_salary|inr }}</td>
+          <td><span class="chip {{ 's-paid' if p.status == 'Paid' else 's-pending' }}">{{ p.status }}</span>
+            {% if p.paid_on %}<small class="emp-sub">{{ p.paid_on.strftime('%d %b %Y') }}</small>{% endif %}</td>
+          <td class="num nowrap">
+            <form method="post" action="{{ url_for('admin_payroll_pay') }}" class="d-inline {{ 'pay-confirm' if p.status == 'Paid' }}"
+                  {% if p.status == 'Paid' %}data-confirm="Move {{ p.full_name }}'s salary back to Pending?"{% endif %}>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}"><input type="hidden" name="ids" value="{{ p.id }}">
+              {% if p.status == 'Pending' %}<button class="act ok" type="submit" name="action" value="pay" title="Mark as paid" aria-label="Mark {{ p.full_name }} as paid"><i class="bi bi-cash-coin"></i></button>
+              {% else %}<button class="act" type="submit" name="action" value="unpay" title="Move back to Pending" aria-label="Move back to pending"><i class="bi bi-arrow-counterclockwise"></i></button>{% endif %}
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="empty-cell"><i class="bi bi-cash-stack d-block fs-3 mb-1"></i>No payroll for {{ month_label }}{% if q or dept or status %} with these filters{% else %}. Click <b>Generate Payroll</b> to create it{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr><th>#</th><th>Employee</th><th>Department</th><th>Designation</th><th class="num">Basic Salary</th><th class="num">Allowances</th><th class="num">Deductions</th><th class="num">Net (monthly)</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for e in items %}
+        <tr>
+          <td>{{ offset + loop.index }}</td>
+          <td><span class="who"><span class="av" style="background: {{ e.color }}">{{ e.initials }}</span>
+            <span>{{ e.full_name }}<small class="emp-sub">{{ e.employee_code or '' }}</small></span></span></td>
+          <td>{{ e.department or '—' }}</td><td>{{ e.designation or '—' }}</td>
+          {% if e.basic is not none %}
+          <td class="num money">{{ e.basic|inr }}</td><td class="num money">{{ e.allowances|inr }}</td><td class="num money">{{ e.deductions|inr }}</td>
+          <td class="num money net-cell">{{ e.net|inr }}</td>
+          {% else %}<td class="num not-set" colspan="4">Salary not set</td>{% endif %}
+          <td class="num"><button type="button" class="act edit-salary" title="{{ 'Edit salary' if e.basic is not none else 'Set salary' }}" aria-label="Set salary for {{ e.full_name }}"
+              data-id="{{ e.id }}" data-name="{{ e.full_name }}" data-basic="{{ e.basic if e.basic is not none else '' }}" data-allow="{{ e.allowances if e.basic is not none else '0' }}" data-ded="{{ e.deductions if e.basic is not none else '0' }}"><i class="bi bi-pencil-square"></i></button></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="empty-cell"><i class="bi bi-people d-block fs-3 mb-1"></i>No employees found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Payroll pages"><span class="text-muted small">{{ total }} {{ 'records' if tab == 'payroll' else 'employees' }}</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_payroll', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for n in range(1, pages + 1) %}<a class="pg {{ 'active' if n == page }}" href="{{ url_for('admin_payroll', page=n, **args) }}">{{ n }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_payroll', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+</div>
+
+{% if tab == 'structure' %}
+<div class="modal fade" id="salaryModal" tabindex="-1" aria-labelledby="salTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('admin_salary_save') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}"><input type="hidden" name="user_id" value="">
+      <div class="modal-header"><h5 class="modal-title" id="salTitle">Salary · <span class="sal-who"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label" for="s_basic">Basic salary (₹ per month)</label>
+            <input class="form-control" type="number" id="s_basic" name="basic" min="1" max="9999999.99" step="0.01" required></div>
+          <div class="col-6"><label class="form-label" for="s_allow">Allowances (₹)</label>
+            <input class="form-control" type="number" id="s_allow" name="allowances" min="0" max="9999999.99" step="0.01" value="0"></div>
+          <div class="col-6"><label class="form-label" for="s_ded">Fixed deductions (₹)</label>
+            <input class="form-control" type="number" id="s_ded" name="deductions" min="0" max="9999999.99" step="0.01" value="0"></div>
+          <div class="col-12"><div class="pay-preview"><span>Net monthly salary</span><b class="sal-net">₹0</b></div></div>
+        </div>
+        <div class="form-text mt-3">Deductions here are fixed monthly items such as PF or tax. Loss-of-pay for absent days is added automatically when payroll is generated.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save Salary</button></div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

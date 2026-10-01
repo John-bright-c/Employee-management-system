@@ -1,0 +1,63 @@
+{% extends "base_app.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Admin Dashboard</h1><p>Manage your team, track progress and drive success</p></div>
+  <div class="date-chip"><i class="bi bi-calendar3"></i>{{ today_label }}</div>
+</div>
+
+<section class="astat-grid">
+  <div class="astat"><span class="ai ai-blue"><i class="bi bi-people-fill"></i></span>
+    <div><small>Total Employees</small><strong>{{ total_emp }}</strong>
+      <em class="{{ 'up' if joined }}">{{ ('+' ~ joined ~ ' joined this month') if joined else 'No new joiners this month' }}</em></div></div>
+  <div class="astat"><span class="ai ai-green"><i class="bi bi-person-check-fill"></i></span>
+    <div><small>Present Today</small><strong>{{ present }}</strong><em>{{ attendance_pct }}% attendance</em></div></div>
+  <div class="astat"><span class="ai ai-orange"><i class="bi bi-person-walking"></i></span>
+    <div><small>On Leave</small><strong>{{ on_leave }}</strong><em>Approved leave today</em></div></div>
+  <div class="astat"><span class="ai ai-purple"><i class="bi bi-list-check"></i></span>
+    <div><small>Total Tasks</small><strong>{{ task_total }}</strong><em>{{ completed_pct }}% completed</em></div></div>
+  <div class="astat"><span class="ai ai-pink"><i class="bi bi-hourglass-split"></i></span>
+    <div><small>Pending Approvals</small><strong>{{ pending_ts + pending_lv }}</strong><em>{{ pending_ts }} timesheet{{ '' if pending_ts == 1 else 's' }} · {{ pending_lv }} leave{{ '' if pending_lv == 1 else 's' }}</em></div></div>
+</section>
+
+<section class="a-grid">
+  <div class="panel">
+    <div class="panel-head"><h2>Employee Attendance (Today)</h2><a href="#" class="link-sm" title="Coming soon">View All</a></div>
+    <div class="table-wrap">
+      <table class="ts-table">
+        <thead><tr><th>#</th><th>Name</th><th>Department</th><th>Check In</th><th>Check Out</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for p in people %}
+          <tr><td>{{ loop.index }}</td>
+            <td><span class="who"><span class="av" style="background: {{ p.color }}">{{ p.initials }}</span>{{ p.name }}</span></td>
+            <td>{{ p.dept }}</td><td class="nowrap">{{ p.check_in }}</td><td class="nowrap">{{ p.check_out }}</td>
+            <td><span class="chip s-{{ p.status|lower|replace(' ','-') }}">{{ p.status }}</span></td></tr>
+        {% else %}
+          <tr><td colspan="6" class="empty-cell">No employees found.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="side-stack">
+    <div class="panel">
+      <div class="panel-head"><h2>Task Overview</h2></div>
+      <div class="donut-row">
+        <div class="donut" style="background: {{ donut }}" role="img" aria-label="{{ task_total }} total tasks"><div><b>{{ task_total }}</b><small>Total Tasks</small></div></div>
+        <ul class="d-legend">
+          {% for l in legend %}<li><i style="background: {{ l.color }}"></i><span>{{ l.label }}</span><b>{{ l.n }} <small>({{ l.pct }}%)</small></b></li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Project Wise Progress</h2></div>
+      {% for pr in projects %}
+      <div class="proj"><div class="proj-top"><span>{{ pr.name }}</span><b>{{ pr.pct }}%</b></div>
+        <div class="bar"><i style="width: {{ pr.pct }}%; background: {{ pr.color }}"></i></div></div>
+      {% else %}<p class="empty-cell">No projects yet.</p>{% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

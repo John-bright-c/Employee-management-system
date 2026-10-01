@@ -1,0 +1,98 @@
+{% extends "base_app.html" %}
+{% block title %}Attendance{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Attendance Management</h1><p>Track employee check-in, check-out and working hours</p></div>
+  <div class="head-tools">
+    <form method="get" action="{{ url_for('admin_attendance') }}" class="month-nav">
+      {% for k in ['department','status','q'] if args.get(k) %}<input type="hidden" name="{{ k }}" value="{{ args[k] }}">{% endfor %}
+      <a class="pg" href="{{ url_for('admin_attendance', **dict(args, date=prev_day)) }}" aria-label="Previous day"><i class="bi bi-chevron-left"></i></a>
+      <label class="month-pick"><i class="bi bi-calendar3"></i><span>{{ short_date }}</span>
+        <input type="date" name="date" value="{{ date_iso }}" max="{{ today_iso }}" data-autosubmit aria-label="Choose date"></label>
+      {% if next_day %}<a class="pg" href="{{ url_for('admin_attendance', **dict(args, date=next_day)) }}" aria-label="Next day"><i class="bi bi-chevron-right"></i></a>
+      {% else %}<span class="pg disabled"><i class="bi bi-chevron-right"></i></span>{% endif %}
+    </form>
+    <a class="btn-blue lg" href="{{ url_for('admin_attendance_export', **args) }}"><i class="bi bi-download"></i> Export</a>
+  </div>
+</div>
+
+<section class="mini-grid five">
+  <div class="mini"><i class="bi bi-people"></i><div><small>Employees</small><b>{{ summary.total }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-person-check"></i><div><small>Present</small><b>{{ summary.present }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-alarm"></i><div><small>Late</small><b>{{ summary.late }}</b></div></div>
+  <div class="mini m-purple"><i class="bi bi-person-walking"></i><div><small>On Leave</small><b>{{ summary.leave }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-person-x"></i><div><small>Absent</small><b>{{ summary.absent }}</b></div></div>
+</section>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_attendance') }}">
+    <input type="hidden" name="date" value="{{ date_iso }}">
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search name or ID..." aria-label="Search employees"></div>
+    <label class="f-item">Department
+      <select name="department" class="form-select" data-autosubmit><option value="">All</option>
+        {% for x in departments %}<option {{ 'selected' if x == dept }}>{{ x }}</option>{% endfor %}</select></label>
+    <label class="f-item">Status
+      <select name="status" class="form-select" data-autosubmit><option value="">All</option>
+        {% for x in statuses %}<option {{ 'selected' if x == status }}>{{ x }}</option>{% endfor %}</select></label>
+    {% if q or dept or status %}<a class="link-sm" href="{{ url_for('admin_attendance', date=date_iso) }}"><i class="bi bi-x-circle"></i> Clear</a>{% endif %}
+  </form>
+
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr><th>#</th><th>Employee</th><th>Department</th><th>Date</th><th>Check In</th><th>Check Out</th><th class="num">Working Hours</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for p in people %}
+        <tr>
+          <td>{{ offset + loop.index }}</td>
+          <td><span class="who"><span class="av" style="background: {{ p.color }}">{{ p.initials }}</span>
+            <span>{{ p.name }}<small class="emp-sub">{{ p.code }}</small></span></span></td>
+          <td>{{ p.dept }}</td><td class="nowrap">{{ short_date }}</td>
+          <td class="nowrap">{{ p.check_in }}</td>
+          <td class="nowrap">{{ p.check_out }}{% if p.running %}<small class="emp-sub">Still working</small>{% endif %}</td>
+          <td class="num"><b>{{ p.hours }}</b></td>
+          <td><span class="chip s-{{ p.status|lower|replace(' ','-') }}">{{ p.status }}</span></td>
+          <td class="num">
+            <button type="button" class="act edit-att" title="Edit times" aria-label="Edit attendance for {{ p.name }}"
+              data-id="{{ p.id }}" data-name="{{ p.name }}" data-in="{{ p.ci_raw }}" data-out="{{ p.co_raw }}"><i class="bi bi-pencil-square"></i></button>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="empty-cell"><i class="bi bi-calendar-x d-block fs-3 mb-1"></i>No employees found{% if q or dept or status %} for these filters{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Attendance pages"><span class="text-muted small">{{ total }} employees · {{ date_label }}</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_attendance', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for n in range(1, pages + 1) %}<a class="pg {{ 'active' if n == page }}" href="{{ url_for('admin_attendance', page=n, **args) }}">{{ n }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_attendance', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="attModal" tabindex="-1" aria-labelledby="attTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('admin_attendance_save') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="user_id" value=""><input type="hidden" name="date" value="{{ date_iso }}">
+      <div class="modal-header"><h5 class="modal-title" id="attTitle">Edit attendance · <span class="att-name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">{{ date_label }}. Use this to correct a missed or wrong check-in or check-out. The employee is notified.</p>
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label" for="att_in">Check in</label><input class="form-control" type="time" id="att_in" name="check_in" required></div>
+          <div class="col-6"><label class="form-label" for="att_out">Check out <span class="text-muted">(optional)</span></label><input class="form-control" type="time" id="att_out" name="check_out"></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "base_auth.html" %}
+{% block title %}{{ code }}{% endblock %}
+{% block card %}
+<div class="state-icon bad"><i class="bi bi-exclamation-octagon"></i></div>
+<h2 class="card-title text-center">{{ code }}</h2>
+<p class="card-sub text-center">{{ message }}</p>
+<a href="{{ url_for('login') }}" class="btn-primary-glow text-center text-decoration-none">Back to Login</a>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base_app.html" %}
+{% block title %}Employee Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Employee Dashboard</h1><p>Track your tasks, log your time and achieve your goals</p></div>
+  <div class="date-chip"><i class="bi bi-calendar3"></i>{{ today_label }}</div>
+</div>
+
+<section class="stat-grid">
+  <div class="stat s-green">
+    <span class="s-icon"><i class="bi bi-check-lg"></i></span>
+    <div class="s-body"><small>Check In</small>
+      <strong>{{ check_in or '--:-- --' }}</strong>
+      {% if check_in %}<em>Today</em>
+      {% else %}<form method="post" action="{{ url_for('check_in') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="s-btn" type="submit" data-once>Check In</button></form>{% endif %}
+    </div>
+  </div>
+
+  <div class="stat s-red">
+    <span class="s-icon"><i class="bi bi-arrow-right"></i></span>
+    <div class="s-body"><small>Check Out</small>
+      <strong>{{ check_out or '--:-- --' }}</strong>
+      {% if check_out %}<em>Today</em>
+      {% elif running %}<form method="post" action="{{ url_for('check_out') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="s-btn" type="submit" data-once>Check Out</button></form>
+      {% else %}<em>Not yet checked out</em>{% endif %}
+    </div>
+  </div>
+
+  <div class="stat s-orange">
+    <span class="s-icon"><i class="bi bi-stopwatch"></i></span>
+    <div class="s-body"><small>Working Hours</small>
+      <strong id="worked" data-start="{{ check_in_iso }}" data-running="{{ 1 if running else 0 }}">{{ worked }}</strong>
+      <em>{{ 'Running…' if running else 'Today' }}</em></div>
+  </div>
+
+  <div class="stat s-purple">
+    <span class="s-icon"><i class="bi bi-list-check"></i></span>
+    <div class="s-body"><small>My Tasks</small><strong>{{ tasks|length }}</strong><em>{{ done_count }} Completed</em></div>
+  </div>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <div class="panel-head"><h2>Today's Tasks</h2>
+      <div class="ph-actions"><a href="{{ url_for('my_tasks') }}" class="link-sm">View All</a>
+        <button class="btn-blue" data-bs-toggle="modal" data-bs-target="#entryModal"><i class="bi bi-plus-lg"></i> Add Timesheet</button></div></div>
+    <ul class="task-list">
+      {% for t in tasks %}
+      <li class="task {{ 'done' if t.status == 'Completed' }}">
+        <input type="checkbox" class="task-check" data-id="{{ t.id }}" {{ 'checked' if t.status == 'Completed' }} aria-label="Mark '{{ t.title }}' complete">
+        <div class="t-main"><b>{{ t.title }}</b><small>Project: {{ t.project or '—' }}</small></div>
+        <span class="chip p-{{ t.priority|lower }}">{{ t.priority }}</span>
+        <span class="chip s-{{ t.status|lower|replace(' ','-') }}">{{ t.status }}</span>
+      </li>
+      {% else %}
+      <li class="empty"><i class="bi bi-emoji-smile"></i>No tasks for today.</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Today's Timesheet</h2>
+      <div class="ph-actions"><a href="{{ url_for('timesheet') }}" class="link-sm">View All</a>
+        <button class="btn-blue" data-bs-toggle="modal" data-bs-target="#entryModal"><i class="bi bi-plus-lg"></i> Add Entry</button></div></div>
+    <div class="table-wrap">
+      <table class="ts-table">
+        <thead><tr><th>Task</th><th>Start Time</th><th>End Time</th><th class="num">Hours</th></tr></thead>
+        <tbody>
+          {% for e in entries %}<tr><td>{{ e.task }}</td><td>{{ e.start }}</td><td>{{ e.end }}</td><td class="num"><b>{{ e.hours }}</b></td></tr>
+          {% else %}<tr><td colspan="4" class="empty-cell">No time logged today.</td></tr>{% endfor %}
+        </tbody>
+        <tfoot><tr><td colspan="3" class="num">Total Hours</td><td class="num"><b>{{ total_hours }}</b></td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="modal fade" id="entryModal" tabindex="-1" aria-labelledby="entryTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('add_timesheet') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h5 class="modal-title" id="entryTitle">Add Timesheet Entry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label" for="work_date">Date</label>
+          <input class="form-control" type="date" id="work_date" name="work_date" value="{{ today_iso }}" max="{{ today_iso }}" required></div>
+        <div class="mb-3"><label class="form-label" for="task">Task</label>
+          <input class="form-control" id="task" name="task" list="task-options" maxlength="200" placeholder="What did you work on?" required>
+          <datalist id="task-options">{% for t in tasks %}<option value="{{ t.title }}">{% endfor %}</datalist></div>
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label" for="start_time">Start time</label><input class="form-control" type="time" id="start_time" name="start_time" required></div>
+          <div class="col-6"><label class="form-label" for="end_time">End time</label><input class="form-control" type="time" id="end_time" name="end_time" required></div>
+        </div>
+        <div class="form-text mt-2" id="dur"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save Entry</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

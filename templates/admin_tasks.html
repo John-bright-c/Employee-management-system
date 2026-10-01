@@ -1,0 +1,104 @@
+{% extends "base_app.html" %}
+{% block title %}Tasks{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Task Management</h1><p>Create, assign and track tasks</p></div>
+  <button class="btn-blue lg add-task" data-bs-toggle="modal" data-bs-target="#taskModal"><i class="bi bi-plus-lg"></i> Create Task</button>
+</div>
+
+<div class="tabs">
+  {% for label, key, n in tabs %}
+  <a class="tab {{ 'active' if status == key }}" href="{{ url_for('admin_tasks', **(dict(args_no_status, status=key) if key else args_no_status)) }}">{{ label }}<span>{{ n }}</span></a>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_tasks') }}">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search tasks or projects..." aria-label="Search tasks"></div>
+    <label class="f-item">Project
+      <select name="project" class="form-select" data-autosubmit><option value="">All</option>
+        {% for p in projects %}<option {{ 'selected' if p == project }}>{{ p }}</option>{% endfor %}</select></label>
+    <label class="f-item">Assignee
+      <select name="assignee" class="form-select" data-autosubmit><option value="">All</option>
+        {% for e in employees %}<option value="{{ e.id }}" {{ 'selected' if e.id == assignee }}>{{ e.full_name }}</option>{% endfor %}</select></label>
+    <label class="f-item">Priority
+      <select name="priority" class="form-select" data-autosubmit><option value="">All</option>
+        {% for p in priorities %}<option {{ 'selected' if p == priority }}>{{ p }}</option>{% endfor %}</select></label>
+    {% if q or project or assignee or priority or status %}<a class="link-sm" href="{{ url_for('admin_tasks') }}"><i class="bi bi-x-circle"></i> Clear</a>{% endif %}
+  </form>
+
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr><th>#</th><th>Task Title</th><th>Project</th><th>Assignee</th><th>Priority</th><th>Due Date</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for t in tasks %}
+        <tr class="{{ 'row-off' if t.status == 'Completed' }}">
+          <td>{{ offset + loop.index }}</td>
+          <td><b>{{ t.title }}</b></td><td>{{ t.project or '—' }}</td>
+          <td><span class="who"><span class="av" style="background: {{ t.color }}">{{ t.initials }}</span>
+            <span>{{ t.full_name }}<small class="emp-sub">{{ t.employee_code or '' }}</small></span></span></td>
+          <td><span class="chip p-{{ t.priority|lower }}">{{ t.priority }}</span></td>
+          <td class="nowrap {{ 'overdue-txt' if t.overdue }}">{{ t.due_date.strftime('%d %b %Y') }}{% if t.overdue %}<small class="emp-sub">Overdue</small>{% endif %}</td>
+          <td><span class="chip s-{{ t.status|lower|replace(' ','-') }}">{{ t.status }}</span></td>
+          <td class="num nowrap">
+            <button type="button" class="act edit-task" title="Edit" aria-label="Edit task {{ t.title }}"
+              data-id="{{ t.id }}" data-title="{{ t.title }}" data-project="{{ t.project or '' }}" data-user="{{ t.user_id }}"
+              data-priority="{{ t.priority }}" data-status="{{ t.status }}" data-due="{{ t.due_date.isoformat() }}"><i class="bi bi-pencil-square"></i></button>
+            <form method="post" action="{{ url_for('admin_task_delete', task_id=t.id) }}" class="d-inline delete-task-form" data-confirm="Delete the task '{{ t.title }}'? This can't be undone.">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="act danger" type="submit" title="Delete" aria-label="Delete task {{ t.title }}"><i class="bi bi-trash3"></i></button></form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty-cell"><i class="bi bi-clipboard-check d-block fs-3 mb-1"></i>No tasks found{% if q or project or assignee or priority or status %} for these filters{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Task pages"><span class="text-muted small">{{ total }} tasks</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_tasks', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for n in range(1, pages + 1) %}<a class="pg {{ 'active' if n == page }}" href="{{ url_for('admin_tasks', page=n, **args) }}">{{ n }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_tasks', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="taskModal" tabindex="-1" aria-labelledby="taskTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form class="modal-content" method="post" action="{{ url_for('admin_task_save') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="task_id" value="">
+      <div class="modal-header"><h5 class="modal-title" id="taskTitle">Create Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label" for="t_title">Task title</label>
+            <input class="form-control" id="t_title" name="title" maxlength="200" required></div>
+          <div class="col-md-6"><label class="form-label" for="t_project">Project <span class="text-muted">(optional)</span></label>
+            <input class="form-control" id="t_project" name="project" list="proj-options" maxlength="120">
+            <datalist id="proj-options">{% for p in projects %}<option value="{{ p }}">{% endfor %}</datalist></div>
+          <div class="col-md-6"><label class="form-label" for="t_assignee">Assign to</label>
+            <select class="form-select" id="t_assignee" name="assignee" required><option value="">Select employee…</option>
+              {% for e in employees %}<option value="{{ e.id }}">{{ e.full_name }}{% if e.employee_code %} ({{ e.employee_code }}){% endif %}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><label class="form-label" for="t_priority">Priority</label>
+            <select class="form-select" id="t_priority" name="priority">{% for p in priorities %}<option {{ 'selected' if p == 'Medium' }}>{{ p }}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><label class="form-label" for="t_due">Due date</label>
+            <input class="form-control" type="date" id="t_due" name="due_date" value="{{ today_iso }}" required></div>
+          <div class="col-md-4" id="statusWrap" hidden><label class="form-label" for="t_status">Status</label>
+            <select class="form-select" id="t_status" name="status">{% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select></div>
+        </div>
+        <div class="form-text mt-3" id="taskHint">The employee gets a notification as soon as the task is assigned.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save Task</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base_auth.html" %}
+{% set to = config.ADMIN_CONTACT_EMAIL %}
+{% set subj = "Interrival account request" %}
+{% set body = "Hello Admin,\n\nPlease create an Interrival account for me.\n\nFull name:\nDepartment:\nManager:\n\nThank you." %}
+{% block title %}Account Access{% endblock %}
+{% block card %}
+<div class="state-icon"><i class="bi bi-person-badge"></i></div>
+<h2 class="card-title text-center">Need an account?</h2>
+<p class="card-sub text-center">Public registration is disabled. Employee accounts are created only by an authorized administrator.</p>
+
+<ul class="contact-list">
+  <li><i class="bi bi-envelope"></i>
+    <div class="flex-grow-1"><small>Email</small><span class="mail-text">{{ to }}</span></div>
+    <button type="button" class="copy-btn" data-copy="{{ to }}" aria-label="Copy email address"><i class="bi bi-clipboard"></i></button>
+  </li>
+  {% if config.ADMIN_CONTACT_PHONE %}
+  <li><i class="bi bi-telephone"></i><div><small>Phone</small><a href="tel:{{ config.ADMIN_CONTACT_PHONE }}">{{ config.ADMIN_CONTACT_PHONE }}</a></div></li>
+  {% endif %}
+</ul>
+
+<p class="hint">Include your full name, department and manager so the admin can set you up quickly.</p>
+
+<a class="btn-primary-glow text-center text-decoration-none" target="_blank" rel="noopener"
+   href="https://mail.google.com/mail/?view=cm&fs=1&to={{ to|urlencode }}&su={{ subj|urlencode }}&body={{ body|urlencode }}">
+  <i class="bi bi-google"></i> Email Admin via Gmail</a>
+<div class="alt-mail">
+  <a target="_blank" rel="noopener" href="https://outlook.office.com/mail/deeplink/compose?to={{ to|urlencode }}&subject={{ subj|urlencode }}&body={{ body|urlencode }}"><i class="bi bi-microsoft"></i> Outlook</a>
+  <a href="mailto:{{ to }}?subject={{ subj|urlencode }}&body={{ body|urlencode }}"><i class="bi bi-envelope-at"></i> Default mail app</a>
+</div>
+<p class="card-foot"><a href="{{ url_for('login') }}" class="link"><i class="bi bi-arrow-left"></i> Back to Login</a></p>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base_app.html" %}
+{% block title %}Projects{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Project Management</h1><p>Create and manage projects</p></div>
+  <button class="btn-blue lg add-project" data-bs-toggle="modal" data-bs-target="#projectModal"><i class="bi bi-plus-lg"></i> Add Project</button>
+</div>
+
+<section class="mini-grid five">
+  <div class="mini"><i class="bi bi-briefcase"></i><div><small>Total Projects</small><b>{{ summary.total }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-play-circle"></i><div><small>Active</small><b>{{ summary.active }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-pause-circle"></i><div><small>On Hold</small><b>{{ summary.hold }}</b></div></div>
+  <div class="mini"><i class="bi bi-check2-circle"></i><div><small>Completed</small><b>{{ summary.done }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-calendar-x"></i><div><small>Past End Date</small><b>{{ summary.overdue }}</b></div></div>
+</section>
+
+{% if unregistered %}
+<div class="flash flash-warning pay-note"><i class="bi bi-info-circle-fill"></i>
+  <span>{{ unregistered }} project name{{ '' if unregistered == 1 else 's' }} used on tasks {{ 'is' if unregistered == 1 else 'are' }} not in this list yet.</span>
+  <form method="post" action="{{ url_for('admin_projects_import') }}" class="ms-auto"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn-blue" type="submit" data-once><i class="bi bi-box-arrow-in-down"></i> Import</button></form></div>
+{% endif %}
+
+<div class="tabs">
+  {% for label, key, n in tabs %}
+  <a class="tab {{ 'active' if status == key }}" href="{{ url_for('admin_projects', **(dict(args_no_status, status=key) if key else args_no_status)) }}">{{ label }}<span>{{ n }}</span></a>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_projects') }}">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search project or client..." aria-label="Search projects"></div>
+    {% if q or status %}<a class="link-sm" href="{{ url_for('admin_projects') }}"><i class="bi bi-x-circle"></i> Clear</a>{% endif %}
+  </form>
+
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr><th>#</th><th>Project Name</th><th>Client</th><th>Start Date</th><th>End Date</th><th>Status</th><th>Progress</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for p in projects %}
+        <tr>
+          <td>{{ offset + loop.index }}</td>
+          <td><span class="proj-name">{{ p.name }}</span>{% if p.description %}<small class="proj-desc" title="{{ p.description }}">{{ p.description }}</small>{% endif %}</td>
+          <td>{{ p.client or '—' }}</td>
+          <td class="nowrap">{{ p.start_date.strftime('%d %b %Y') if p.start_date else '—' }}</td>
+          <td class="nowrap {{ 'overdue-txt' if p.late }}">{{ p.end_date.strftime('%d %b %Y') if p.end_date else '—' }}{% if p.late %}<small class="emp-sub">Past end date</small>{% endif %}</td>
+          <td><span class="chip s-{{ p.status|lower|replace(' ','-') }}">{{ p.status }}</span></td>
+          <td class="prog">
+            <div class="prog-top"><span>{{ p.pct }}%</span></div>
+            <div class="bar"><i class="{{ 'done' if p.pct == 100 and p.total }}" style="width: {{ p.pct }}%"></i></div>
+            <small>{{ p.done }}/{{ p.total }} task{{ '' if p.total == 1 else 's' }} done</small>
+          </td>
+          <td class="num nowrap">
+            <a class="act" href="{{ url_for('admin_tasks', project=p.name) }}" title="View tasks" aria-label="View tasks of {{ p.name }}"><i class="bi bi-list-check"></i></a>
+            <button type="button" class="act edit-project" title="Edit" aria-label="Edit {{ p.name }}"
+              data-id="{{ p.id }}" data-name="{{ p.name }}" data-client="{{ p.client or '' }}" data-desc="{{ p.description or '' }}"
+              data-start="{{ p.start_date.isoformat() if p.start_date else '' }}" data-end="{{ p.end_date.isoformat() if p.end_date else '' }}" data-status="{{ p.status }}"><i class="bi bi-pencil-square"></i></button>
+            <form method="post" action="{{ url_for('admin_project_delete', pid=p.id) }}" class="d-inline {{ 'proj-confirm' if not p.total }}"
+                  {% if not p.total %}data-confirm="Delete the project '{{ p.name }}'? This can't be undone."{% endif %}>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="act danger {{ 'off' if p.total }}" type="submit" {{ 'disabled' if p.total }} title="{{ 'Has tasks - mark it Completed or Cancelled instead' if p.total else 'Delete' }}" aria-label="Delete {{ p.name }}"><i class="bi bi-trash3"></i></button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty-cell"><i class="bi bi-briefcase d-block fs-3 mb-1"></i>No projects found{% if q or status %} for these filters{% else %}. Click <b>Add Project</b> to create one{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Project pages"><span class="text-muted small">{{ total }} projects</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_projects', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for n in range(1, pages + 1) %}<a class="pg {{ 'active' if n == page }}" href="{{ url_for('admin_projects', page=n, **args) }}">{{ n }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_projects', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="projectModal" tabindex="-1" aria-labelledby="projTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form class="modal-content" method="post" action="{{ url_for('admin_project_save') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="project_id" value="">
+      <div class="modal-header"><h5 class="modal-title" id="projTitle">Add Project</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-7"><label class="form-label" for="p_name">Project name</label><input class="form-control" id="p_name" name="name" maxlength="120" required></div>
+          <div class="col-md-5"><label class="form-label" for="p_client">Client <span class="text-muted">(optional)</span></label><input class="form-control" id="p_client" name="client" maxlength="120" placeholder="e.g. ABC Pvt Ltd or Internal"></div>
+          <div class="col-md-4"><label class="form-label" for="p_start">Start date</label><input class="form-control" type="date" id="p_start" name="start_date"></div>
+          <div class="col-md-4"><label class="form-label" for="p_end">End date</label><input class="form-control" type="date" id="p_end" name="end_date"></div>
+          <div class="col-md-4"><label class="form-label" for="p_status">Status</label>
+            <select class="form-select" id="p_status" name="status">{% for s in statuses %}<option {{ 'selected' if s == 'Active' }}>{{ s }}</option>{% endfor %}</select></div>
+          <div class="col-12"><label class="form-label" for="p_desc">Description <span class="text-muted">(optional)</span></label>
+            <textarea class="form-control" id="p_desc" name="description" rows="3" maxlength="500"></textarea></div>
+        </div>
+        <div class="form-text mt-3" id="projHint">Projects group tasks. Assign tasks to a project from the Tasks page.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save Project</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

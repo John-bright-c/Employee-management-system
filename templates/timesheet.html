@@ -1,0 +1,91 @@
+{% extends "base_app.html" %}
+{% block title %}Timesheet{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Timesheet</h1><p>Log your working hours and track approval status</p></div>
+  <button class="btn-blue lg add-entry" data-bs-toggle="modal" data-bs-target="#entryModal"><i class="bi bi-plus-lg"></i> Add Entry</button>
+</div>
+
+<section class="mini-grid">
+  <div class="mini"><i class="bi bi-clock-history"></i><div><small>Total Hours</small><b>{{ summary.total }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-patch-check"></i><div><small>Approved</small><b>{{ summary.approved }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-hourglass-split"></i><div><small>Pending</small><b>{{ summary.pending }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-x-octagon"></i><div><small>Rejected</small><b>{{ summary.rejected }}</b></div></div>
+</section>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('timesheet') }}">
+    <label class="f-item">From <input type="date" name="from" value="{{ d_from }}" class="form-control"></label>
+    <label class="f-item">To <input type="date" name="to" value="{{ d_to }}" class="form-control"></label>
+    <label class="f-item">Status
+      <select name="status" class="form-select"><option value="">All</option>
+        {% for s in statuses %}<option {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select></label>
+    <button class="btn-blue" type="submit"><i class="bi bi-funnel"></i> Apply</button>
+    <a class="link-sm" href="{{ url_for('timesheet') }}">This month</a>
+  </form>
+
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr><th>Date</th><th>Task</th><th>Start Time</th><th>End Time</th><th class="num">Hours</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr>
+          <td class="nowrap">{{ e.date.strftime('%d %b %Y') }}</td>
+          <td>{{ e.task }}</td><td class="nowrap">{{ e.start }}</td><td class="nowrap">{{ e.end }}</td>
+          <td class="num"><b>{{ e.hours }}</b></td>
+          <td><span class="chip s-{{ e.status|lower }}">{{ e.status }}</span></td>
+          <td class="num nowrap">
+            {% if e.editable %}
+            <button type="button" class="act edit-entry" title="Edit" aria-label="Edit entry"
+              data-id="{{ e.id }}" data-date="{{ e.date.isoformat() }}" data-task="{{ e.task }}" data-start="{{ e.start_raw }}" data-end="{{ e.end_raw }}"><i class="bi bi-pencil-square"></i></button>
+            <form method="post" action="{{ url_for('timesheet_delete', entry_id=e.id) }}" class="d-inline delete-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="act danger" type="submit" title="Delete" aria-label="Delete entry"><i class="bi bi-trash3"></i></button></form>
+            {% else %}<span class="act locked" title="Approved entries are locked"><i class="bi bi-lock"></i></span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty-cell"><i class="bi bi-clock d-block fs-3 mb-1"></i>No timesheet entries for this period.</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="4" class="num">Total Hours ({{ total }} entr{{ 'y' if total == 1 else 'ies' }})</td><td class="num"><b>{{ filtered_hours }}</b></td><td colspan="2"></td></tr></tfoot>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Timesheet pages">
+    <span class="text-muted small">Page {{ page }} of {{ pages }}</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('timesheet', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for p in range(1, pages + 1) %}<a class="pg {{ 'active' if p == page }}" href="{{ url_for('timesheet', page=p, **args) }}">{{ p }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('timesheet', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div>
+  </nav>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="entryModal" tabindex="-1" aria-labelledby="entryTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="{{ url_for('timesheet_save') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="entry_id" value="">
+      <div class="modal-header"><h5 class="modal-title" id="entryTitle">Add Timesheet Entry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label" for="work_date">Date</label>
+          <input class="form-control" type="date" id="work_date" name="work_date" value="{{ today_iso }}" data-today="{{ today_iso }}" max="{{ today_iso }}" required></div>
+        <div class="mb-3"><label class="form-label" for="task">Task</label>
+          <input class="form-control" id="task" name="task" list="task-options" maxlength="200" placeholder="What did you work on?" required>
+          <datalist id="task-options">{% for t in task_options %}<option value="{{ t }}">{% endfor %}</datalist></div>
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label" for="start_time">Start time</label><input class="form-control" type="time" id="start_time" name="start_time" required></div>
+          <div class="col-6"><label class="form-label" for="end_time">End time</label><input class="form-control" type="time" id="end_time" name="end_time" required></div>
+        </div>
+        <div class="form-text mt-2" id="dur"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save Entry</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

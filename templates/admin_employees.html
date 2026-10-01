@@ -1,0 +1,111 @@
+{% extends "base_app.html" %}
+{% block title %}Employees{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Employee Management</h1><p>Add, edit and manage employee details</p></div>
+  <button class="btn-blue lg add-emp" data-bs-toggle="modal" data-bs-target="#empModal" data-next="{{ next_code }}"><i class="bi bi-plus-lg"></i> Add Employee</button>
+</div>
+
+<section class="mini-grid">
+  <div class="mini"><i class="bi bi-people"></i><div><small>Total Employees</small><b>{{ stats.total }}</b></div></div>
+  <div class="mini m-green"><i class="bi bi-person-check"></i><div><small>Active</small><b>{{ stats.active }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-person-slash"></i><div><small>Inactive</small><b>{{ stats.inactive }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-diagram-3"></i><div><small>Departments</small><b>{{ stats.depts }}</b></div></div>
+</section>
+
+<div class="panel">
+  <form class="filters" method="get" action="{{ url_for('admin_employees') }}">
+    <div class="search-box"><i class="bi bi-search"></i><input type="search" name="q" value="{{ q }}" placeholder="Search name, email or ID..." aria-label="Search employees"></div>
+    <label class="f-item">Department
+      <select name="department" class="form-select" data-autosubmit><option value="">All</option>
+        {% for d in existing_depts %}<option {{ 'selected' if d == dept }}>{{ d }}</option>{% endfor %}</select></label>
+    <label class="f-item">Status
+      <select name="status" class="form-select" data-autosubmit><option value="">All</option>
+        {% for s in ['Active','Inactive'] %}<option {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select></label>
+    {% if q or dept or status %}<a class="link-sm" href="{{ url_for('admin_employees') }}"><i class="bi bi-x-circle"></i> Clear</a>{% endif %}
+  </form>
+
+  <div class="table-wrap">
+    <table class="ts-table">
+      <thead><tr><th>#</th><th>Employee ID</th><th>Name</th><th>Department</th><th>Designation</th><th>Status</th><th class="num">Actions</th></tr></thead>
+      <tbody>
+      {% for e in employees %}
+        <tr class="{{ 'row-off' if not e.is_active }}">
+          <td>{{ (page - 1) * 10 + loop.index }}</td>
+          <td class="nowrap"><b>{{ e.employee_code or '—' }}</b></td>
+          <td><span class="who"><span class="av" style="background: {{ e.color }}">{{ e.initials }}</span>
+            <span>{{ e.full_name }}<small class="emp-sub">{{ e.email }}</small></span></span></td>
+          <td>{{ e.department or '—' }}</td><td>{{ e.designation or '—' }}</td>
+          <td><span class="chip {{ 's-active' if e.is_active else 's-inactive' }}">{{ 'Active' if e.is_active else 'Inactive' }}</span>
+            {% if e.locked %}<span class="chip s-late" title="Too many failed logins">Locked</span>{% endif %}</td>
+          <td class="num nowrap">
+            <button type="button" class="act edit-emp" title="Edit" aria-label="Edit {{ e.full_name }}"
+              data-id="{{ e.id }}" data-code="{{ e.employee_code or '' }}" data-name="{{ e.full_name }}" data-email="{{ e.email }}"
+              data-dept="{{ e.department or '' }}" data-desig="{{ e.designation or '' }}"><i class="bi bi-pencil-square"></i></button>
+            {% if e.locked %}
+            <form method="post" action="{{ url_for('admin_employee_unlock', emp_id=e.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="act" type="submit" title="Unlock account" aria-label="Unlock {{ e.full_name }}"><i class="bi bi-unlock"></i></button></form>
+            {% endif %}
+            <form method="post" action="{{ url_for('admin_employee_toggle', emp_id=e.id) }}" class="d-inline toggle-form"
+              data-confirm="{{ 'Deactivate ' ~ e.full_name ~ '? They will be signed out and unable to log in.' if e.is_active else 'Reactivate ' ~ e.full_name ~ '?' }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% if e.is_active %}<button class="act danger" type="submit" title="Deactivate" aria-label="Deactivate {{ e.full_name }}"><i class="bi bi-person-slash"></i></button>
+              {% else %}<button class="act ok" type="submit" title="Activate" aria-label="Activate {{ e.full_name }}"><i class="bi bi-person-check"></i></button>{% endif %}
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty-cell"><i class="bi bi-people d-block fs-3 mb-1"></i>No employees found{% if q or dept or status %} for these filters{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="pager" aria-label="Employee pages"><span class="text-muted small">{{ total }} employees</span>
+    <div>
+      <a class="pg {{ 'disabled' if page == 1 }}" href="{{ url_for('admin_employees', page=page-1, **args) }}" aria-label="Previous"><i class="bi bi-chevron-left"></i></a>
+      {% for p in range(1, pages + 1) %}<a class="pg {{ 'active' if p == page }}" href="{{ url_for('admin_employees', page=p, **args) }}">{{ p }}</a>{% endfor %}
+      <a class="pg {{ 'disabled' if page == pages }}" href="{{ url_for('admin_employees', page=page+1, **args) }}" aria-label="Next"><i class="bi bi-chevron-right"></i></a>
+    </div></nav>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="empModal" tabindex="-1" aria-labelledby="empTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form class="modal-content" method="post" action="{{ url_for('admin_employee_save') }}" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="emp_id" value="">
+      <div class="modal-header"><h5 class="modal-title" id="empTitle">Add Employee</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4"><label class="form-label" for="employee_code">Employee ID</label>
+            <input class="form-control" id="employee_code" name="employee_code" value="{{ next_code }}" maxlength="20" required></div>
+          <div class="col-md-8"><label class="form-label" for="full_name">Full name</label>
+            <input class="form-control" id="full_name" name="full_name" maxlength="120" required></div>
+          <div class="col-md-12"><label class="form-label" for="email">Email address</label>
+            <input class="form-control" type="email" id="email" name="email" maxlength="190" required></div>
+          <div class="col-md-6"><label class="form-label" for="department">Department</label>
+            <input class="form-control" id="department" name="department" list="dept-options" maxlength="80">
+            <datalist id="dept-options">{% for d in departments %}<option value="{{ d }}">{% endfor %}</datalist></div>
+          <div class="col-md-6"><label class="form-label" for="designation">Designation</label>
+            <input class="form-control" id="designation" name="designation" maxlength="120"></div>
+          <div class="col-12"><label class="form-label" for="password" id="pwLabel">Temporary password</label>
+            <div class="pw-row">
+              <input class="form-control" type="password" id="password" name="password" autocomplete="new-password" required>
+              <button type="button" class="btn btn-light" id="pwShow" aria-label="Show password"><i class="bi bi-eye"></i></button>
+              <button type="button" class="btn btn-light" id="pwGen"><i class="bi bi-magic"></i> Generate</button>
+            </div>
+            <div class="form-text" id="pwHint">8+ characters with upper and lower case, a number and a symbol. Share it with the employee securely.</div></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-blue" data-once>Save Employee</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "base_app.html" %}
+{% block title %}Settings{% endblock %}
+{% block head %}<link href="{{ url_for('static', filename='admin.css') }}" rel="stylesheet">{% endblock %}
+{% macro badge(name) %}<span class="chip {{ 's-active' if name in custom else 's-read' }}">{{ 'Customized' if name in custom else 'Default' }}</span>{% endmacro %}
+{% macro actions(section) %}
+  <div class="set-actions">
+    <button class="btn-blue lg" type="submit" data-once><i class="bi bi-check2-circle"></i> Save Changes</button>
+    <button class="btn btn-light" type="submit" form="resetForm"><i class="bi bi-arrow-counterclockwise"></i> Restore Defaults</button>
+  </div>
+{% endmacro %}
+{% block content %}
+{% set meta = {'work': ('Work & Leave', 'clock-history'), 'security': ('Security', 'shield-lock'), 'organization': ('Organization', 'building'), 'account': ('My Account', 'person-circle')} %}
+<div class="page-head">
+  <div><h1>Settings</h1><p>Configure attendance rules, security and your account</p></div>
+</div>
+
+<div class="tabs">
+  {% for key in tabs %}<a class="tab {{ 'active' if tab == key }}" href="{{ url_for('admin_settings', tab=key) }}"><i class="bi bi-{{ meta[key][1] }}"></i> {{ meta[key][0] }}</a>{% endfor %}
+</div>
+
+{% if tab == 'work' %}
+<form class="panel set-panel" method="post" action="{{ url_for('admin_settings_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="work">
+  <div class="set-row">
+    <div class="set-label"><b>Late check-in time {{ badge('late_after') }}</b>
+      <small>Check-ins after this time are marked <b>Late</b>. This applies to every attendance record, including past days, because the status is worked out from the check-in time. Default: {{ defaults.late_after }}.</small></div>
+    <div class="set-ctl"><input type="time" class="form-control" name="late_after" value="{{ values.late_after }}" min="{{ specs.late_after.lo }}" max="{{ specs.late_after.hi }}" required aria-label="Late check-in time"></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Monthly leave limit {{ badge('monthly_leave_limit') }}</b>
+      <small>Working days each employee can take per calendar month. Existing requests are not changed; remaining balances update straight away. Default: {{ defaults.monthly_leave_limit }}.</small></div>
+    <div class="set-ctl"><div class="input-group"><input type="number" class="form-control" name="monthly_leave_limit" value="{{ values.monthly_leave_limit }}" min="{{ specs.monthly_leave_limit.lo }}" max="{{ specs.monthly_leave_limit.hi }}" step="1" required aria-label="Monthly leave limit"><span class="input-group-text">days</span></div></div>
+  </div>
+  {{ actions('work') }}
+</form>
+
+{% elif tab == 'security' %}
+<form class="panel set-panel" method="post" action="{{ url_for('admin_settings_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="security">
+  <div class="set-row">
+    <div class="set-label"><b>Session timeout {{ badge('session_idle_minutes') }}</b>
+      <small>Sign people out after this much inactivity (not applied to "Remember me" sessions). Default: {{ defaults.session_idle_minutes }} minutes.</small></div>
+    <div class="set-ctl"><div class="input-group"><input type="number" class="form-control" name="session_idle_minutes" value="{{ values.session_idle_minutes }}" min="{{ specs.session_idle_minutes.lo }}" max="{{ specs.session_idle_minutes.hi }}" required aria-label="Session timeout in minutes"><span class="input-group-text">min</span></div></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Failed login attempts {{ badge('max_failed_attempts') }}</b>
+      <small>An account is locked after this many wrong passwords in a row. Default: {{ defaults.max_failed_attempts }}.</small></div>
+    <div class="set-ctl"><div class="input-group"><input type="number" class="form-control" name="max_failed_attempts" value="{{ values.max_failed_attempts }}" min="{{ specs.max_failed_attempts.lo }}" max="{{ specs.max_failed_attempts.hi }}" required aria-label="Failed login attempts"><span class="input-group-text">tries</span></div></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Lockout duration {{ badge('lockout_minutes') }}</b>
+      <small>How long a locked account must wait. You can also unlock someone from the Employees page. Default: {{ defaults.lockout_minutes }} minutes.</small></div>
+    <div class="set-ctl"><div class="input-group"><input type="number" class="form-control" name="lockout_minutes" value="{{ values.lockout_minutes }}" min="{{ specs.lockout_minutes.lo }}" max="{{ specs.lockout_minutes.hi }}" required aria-label="Lockout duration in minutes"><span class="input-group-text">min</span></div></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Password reset link validity {{ badge('reset_token_minutes') }}</b>
+      <small>How long the emailed reset link works. Links already sent keep the time they were created with. Default: {{ defaults.reset_token_minutes }} minutes.</small></div>
+    <div class="set-ctl"><div class="input-group"><input type="number" class="form-control" name="reset_token_minutes" value="{{ values.reset_token_minutes }}" min="{{ specs.reset_token_minutes.lo }}" max="{{ specs.reset_token_minutes.hi }}" required aria-label="Reset link validity in minutes"><span class="input-group-text">min</span></div></div>
+  </div>
+  {{ actions('security') }}
+</form>
+
+{% elif tab == 'organization' %}
+<form class="panel set-panel" method="post" action="{{ url_for('admin_settings_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="organization">
+  <div class="set-row">
+    <div class="set-label"><b>Departments {{ badge('departments') }}</b>
+      <small>One per line. These appear in the department list when you add or edit an employee. Removing one here does not change employees who already belong to it, and it stays listed while someone uses it.</small></div>
+    <div class="set-ctl"><textarea class="form-control" name="departments" rows="7" required aria-label="Departments, one per line">{{ values.departments }}</textarea></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Contact email {{ badge('contact_email') }}</b>
+      <small>Shown on the public "Need an account?" page as the address people write to.</small></div>
+    <div class="set-ctl"><input type="email" class="form-control" name="contact_email" value="{{ values.contact_email }}" maxlength="190" required aria-label="Contact email"></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Contact phone {{ badge('contact_phone') }}</b>
+      <small>Optional. Leave empty to hide the phone number on that page.</small></div>
+    <div class="set-ctl"><input type="tel" class="form-control" name="contact_phone" value="{{ values.contact_phone }}" maxlength="30" placeholder="+91 98765 43210" aria-label="Contact phone"></div>
+  </div>
+  {{ actions('organization') }}
+</form>
+
+{% else %}
+<div class="set-two">
+  <form class="panel set-panel" method="post" action="{{ url_for('admin_settings_profile') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2 class="set-title"><i class="bi bi-person-badge"></i> Profile</h2>
+    <p class="set-sub">{{ me.employee_code or 'Admin' }}{% if me.last_login_at %} · last sign-in {{ me.last_login_at.strftime('%d %b %Y, %I:%M %p') }} UTC{% endif %}</p>
+    <label class="form-label" for="p_name">Full name</label>
+    <input class="form-control" id="p_name" name="full_name" value="{{ me.full_name }}" maxlength="100" required autocomplete="name">
+    <label class="form-label mt-3" for="p_email">Email <span class="text-muted">(used to sign in)</span></label>
+    <input class="form-control" type="email" id="p_email" name="email" value="{{ me.email }}" maxlength="190" required autocomplete="email">
+    <label class="form-label mt-3" for="p_desig">Designation</label>
+    <input class="form-control" id="p_desig" name="designation" value="{{ me.designation or '' }}" maxlength="100" placeholder="e.g. HR Manager">
+    <div class="set-actions"><button class="btn-blue lg" type="submit" data-once><i class="bi bi-check2-circle"></i> Save Profile</button></div>
+  </form>
+
+  <form class="panel set-panel" method="post" action="{{ url_for('admin_settings_password') }}" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2 class="set-title"><i class="bi bi-key"></i> Change Password</h2>
+    <p class="set-sub">Use a password you don't use anywhere else.</p>
+    <label class="form-label" for="pw_cur">Current password</label>
+    <input class="form-control pw-field" type="password" id="pw_cur" name="current_password" required autocomplete="current-password">
+    <label class="form-label mt-3" for="pw_new">New password</label>
+    <input class="form-control pw-field" type="password" id="pw_new" name="new_password" required autocomplete="new-password">
+    <ul class="pw-rules" id="pwRules" aria-live="polite">
+      <li data-rule="len">At least 8 characters</li><li data-rule="upper">One uppercase letter</li><li data-rule="lower">One lowercase letter</li>
+      <li data-rule="num">One number</li><li data-rule="sym">One special character</li>
+    </ul>
+    <label class="form-label" for="pw_conf">Confirm new password</label>
+    <input class="form-control pw-field" type="password" id="pw_conf" name="confirm_password" required autocomplete="new-password">
+    <div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="showPw"><label class="form-check-label" for="showPw">Show passwords</label></div>
+    <div class="set-actions"><button class="btn-blue lg" type="submit" data-once><i class="bi bi-shield-check"></i> Update Password</button></div>
+  </form>
+</div>
+{% endif %}
+
+{% if tab != 'account' %}
+<form id="resetForm" method="post" action="{{ url_for('admin_settings_reset') }}" class="set-confirm" data-confirm="Restore the default values for this section? Your saved choices will be removed.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="{{ tab }}">
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='admin.js') }}"></script>{% endblock %}

@@ -1,0 +1,4 @@
+Flask>=3.0
+Flask-WTF>=1.2
+mysql-connector-python>=8.4
+python-dotenv>=1.0

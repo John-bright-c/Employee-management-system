@@ -1,0 +1,65 @@
+{% extends "base_app.html" %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Attendance</h1><p>Track your check-in, check-out and working hours</p></div>
+  <form method="get" action="{{ url_for('attendance') }}" class="month-nav">
+    <a class="pg" href="{{ url_for('attendance', month=prev_month) }}" aria-label="Previous month"><i class="bi bi-chevron-left"></i></a>
+    <label class="month-pick"><i class="bi bi-calendar3"></i><span>{{ month_label }}</span>
+      <input type="month" name="month" value="{{ month_value }}" max="{{ max_month }}" data-autosubmit aria-label="Choose month"></label>
+    {% if next_month %}<a class="pg" href="{{ url_for('attendance', month=next_month) }}" aria-label="Next month"><i class="bi bi-chevron-right"></i></a>
+    {% else %}<span class="pg disabled"><i class="bi bi-chevron-right"></i></span>{% endif %}
+  </form>
+</div>
+
+{% if is_current %}
+<section class="today-card">
+  <div class="tc-info">
+    <span class="tc-badge"><i class="bi bi-brightness-high"></i> Today</span>
+    <div class="tc-times">
+      <div><small>Check In</small><b>{{ today_info.check_in or '--:-- --' }}</b></div>
+      <div><small>Check Out</small><b>{{ today_info.check_out or '--:-- --' }}</b></div>
+      <div><small>Working Hours</small><b id="worked" data-start="{{ today_info.start_iso }}" data-running="{{ 1 if today_info.running else 0 }}">{{ today_info.worked }}</b></div>
+    </div>
+  </div>
+  <div class="tc-action">
+    {% if not today_info.check_in %}
+    <form method="post" action="{{ url_for('check_in') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('attendance') }}">
+      <button class="btn-blue lg" type="submit" data-once><i class="bi bi-box-arrow-in-right"></i> Check In</button></form>
+    {% elif today_info.running %}
+    <form method="post" action="{{ url_for('check_out') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ url_for('attendance') }}">
+      <button class="btn-blue lg btn-danger-solid" type="submit" data-once><i class="bi bi-box-arrow-right"></i> Check Out</button></form>
+    {% else %}<span class="chip s-present"><i class="bi bi-check-circle"></i> Day completed</span>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+<section class="mini-grid">
+  <div class="mini m-green"><i class="bi bi-person-check"></i><div><small>Days Present</small><b>{{ summary.present }}</b></div></div>
+  <div class="mini m-orange"><i class="bi bi-alarm"></i><div><small>Late Arrivals</small><b>{{ summary.late }}</b></div></div>
+  <div class="mini m-red"><i class="bi bi-person-x"></i><div><small>Absent Days</small><b>{{ summary.absent }}</b></div></div>
+  <div class="mini"><i class="bi bi-clock-history"></i><div><small>Total Hours <span class="text-muted">(avg {{ summary.avg }}/day)</span></small><b>{{ summary.hours }}</b></div></div>
+</section>
+
+<div class="panel">
+  <div class="panel-head"><h2>{{ month_label }}</h2>
+    <div class="legend"><span><i class="dot-l l-green"></i>Present</span><span><i class="dot-l l-orange"></i>Late after 09:30 AM</span><span><i class="dot-l l-red"></i>Absent</span></div></div>
+  <div class="table-wrap">
+    <table class="ts-table att-table">
+      <thead><tr><th>Date</th><th>Day</th><th>Check In</th><th>Check Out</th><th class="num">Working Hours</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for d in days %}
+        <tr class="{{ 'weekend' if d.weekend and d.status == 'Weekend' }}">
+          <td class="nowrap">{{ d.date.strftime('%d %b %Y') }}</td><td>{{ d.date.strftime('%A') }}</td>
+          <td class="nowrap">{{ d.check_in }}</td><td class="nowrap">{{ d.check_out }}</td>
+          <td class="num"><b>{{ d.hours }}</b></td>
+          <td><span class="chip s-{{ d.status|lower|replace(' ','-') }}">{{ d.status }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty-cell">No attendance data for this month.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base_auth.html" %}
+{% from "_components.html" import field, submit, flashes %}
+{% block title %}Login{% endblock %}
+{% block card %}
+<h2 class="card-title">Welcome Back!</h2>
+<p class="card-sub">Sign in to access your workspace.</p>
+{{ flashes() }}
+<form method="post" novalidate data-validate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {{ field('email', 'Email Address', 'email', 'envelope', 'Email Address', email, 'required email', 'username', True) }}
+  {{ field('password', 'Password', 'password', 'lock', 'Password', '', 'required', 'current-password') }}
+  <div class="row-between">
+    <div class="form-check"><input class="form-check-input" type="checkbox" id="remember" name="remember" checked>
+      <label class="form-check-label" for="remember">Remember me</label></div>
+    <a href="{{ url_for('forgot_password') }}" class="link">Forgot Password?</a>
+  </div>
+  {{ submit('Login', 'Signing in…') }}
+</form>
+<p class="card-foot">Don't have an account? <a href="{{ url_for('contact_admin') }}" class="link">Contact Admin</a></p>
+{% endblock %}
