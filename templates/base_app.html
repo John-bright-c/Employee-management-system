@@ -23,7 +23,7 @@
                     ('Notifications','bell','admin_notifications'),('Settings','gear','admin_settings')] %}
       {% else %}
       {% set nav = [('Dashboard','grid-1x2-fill','employee_dashboard'),('My Tasks','check2-square','my_tasks'),('Timesheet','clock','timesheet'),
-                    ('Attendance','calendar-check','attendance'),('Leaves','calendar2-x','leaves'),('Notifications','bell','notifications')] %}
+                    ('Attendance','calendar-check','attendance'),('Leaves','calendar2-x','leaves'),('Notifications','bell','notifications'),('Change Password','key','employee_change_password')] %}
       {% endif %}
       {% for label, icon, endpoint in nav %}
         {% if endpoint %}<a href="{{ url_for(endpoint) }}" class="{{ 'active' if request.endpoint == endpoint }}"><i class="bi bi-{{ icon }}"></i>{{ label }}{% if label == 'Notifications' and unread_count %}<span class="nav-badge">{{ unread_count if unread_count < 100 else '99+' }}</span>{% endif %}</a>

@@ -971,6 +971,34 @@ def fmt_duration(minutes):
     return f"{minutes // 60}h {minutes % 60:02d}m"
 
 
+
+
+@app.route("/employee/change-password", methods=["GET", "POST"])
+@role_required("employee")
+def employee_change_password():
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+        uid = session["user_id"]
+        row = query_one("SELECT password_hash FROM users WHERE id=%s AND role='employee'", (uid,))
+        problems = password_errors(new)
+        if not row or not check_password_hash(row["password_hash"], current):
+            flash("Your current password is incorrect.", "danger")
+        elif new != confirm:
+            flash("The new passwords don't match.", "danger")
+        elif problems:
+            flash("Password must include: " + ", ".join(m.lower() for m in problems) + ".", "danger")
+        elif check_password_hash(row["password_hash"], new):
+            flash("Choose a password you haven't used just now.", "danger")
+        else:
+            execute("UPDATE users SET password_hash=%s, failed_attempts=0, locked_until=NULL WHERE id=%s AND role='employee'",
+                    (generate_password_hash(new), uid))
+            flash("Password changed successfully.", "success")
+            return redirect(url_for("employee_change_password"))
+    return render_template("employee_change_password.html")
+
+
 @app.route("/employee/dashboard")
 @role_required("employee")
 def employee_dashboard():
