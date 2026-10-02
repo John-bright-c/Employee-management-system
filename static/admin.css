@@ -133,3 +133,46 @@ tr.row-off td{color:#8a97b1}tr.row-off .av{filter:grayscale(.8);opacity:.7}
 .pw-rules li.ok{color:#0e8f5f}.pw-rules li.ok::before{content:"\2713"}
 @media (max-width:991.98px){.set-two{grid-template-columns:1fr}}
 @media (max-width:640px){.set-row{grid-template-columns:1fr}}
+
+/* Sidebar layout */
+.sidebar {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Fixed logo */
+.side-logo {
+    flex-shrink: 0;
+}
+
+/* Scrollable navigation */
+.side-nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #888 transparent;
+    padding-bottom: 10px;
+}
+
+/* Chrome, Edge and Safari scrollbar */
+.side-nav::-webkit-scrollbar {
+    width: 5px;
+}
+
+.side-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.side-nav::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+/* Fixed user profile at bottom */
+.side-user {
+    flex-shrink: 0;
+}
