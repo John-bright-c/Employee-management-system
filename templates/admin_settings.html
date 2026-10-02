@@ -22,9 +22,24 @@
 <form class="panel set-panel" method="post" action="{{ url_for('admin_settings_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="work">
   <div class="set-row">
-    <div class="set-label"><b>Late check-in time {{ badge('late_after') }}</b>
-      <small>Check-ins after this time are marked <b>Late</b>. This applies to every attendance record, including past days, because the status is worked out from the check-in time. Default: {{ defaults.late_after }}.</small></div>
-    <div class="set-ctl"><input type="time" class="form-control" name="late_after" value="{{ values.late_after }}" min="{{ specs.late_after.lo }}" max="{{ specs.late_after.hi }}" required aria-label="Late check-in time"></div>
+    <div class="set-label"><b>Monday to Friday: start time {{ badge('late_after') }}</b>
+      <small>Office starts at this time. Check-ins after it on Monday to Friday are marked <b>Late</b>. Applies to past days too, because the status is worked out from the check-in time. Default: {{ defaults.late_after }}.</small></div>
+    <div class="set-ctl"><input type="time" class="form-control" name="late_after" value="{{ values.late_after }}" min="{{ specs.late_after.lo }}" max="{{ specs.late_after.hi }}" required aria-label="Monday to Friday: start time"></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Monday to Friday: end time {{ badge('work_end') }}</b>
+      <small>Office closing time on Monday to Friday. Default: {{ defaults.work_end }}.</small></div>
+    <div class="set-ctl"><input type="time" class="form-control" name="work_end" value="{{ values.work_end }}" min="{{ specs.work_end.lo }}" max="{{ specs.work_end.hi }}" required aria-label="Monday to Friday: end time"></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Saturday: start time {{ badge('sat_late_after') }}</b>
+      <small>Office starts at this time on Saturday. Check-ins after it are marked <b>Late</b>. Default: {{ defaults.sat_late_after }}.</small></div>
+    <div class="set-ctl"><input type="time" class="form-control" name="sat_late_after" value="{{ values.sat_late_after }}" min="{{ specs.sat_late_after.lo }}" max="{{ specs.sat_late_after.hi }}" required aria-label="Saturday: start time"></div>
+  </div>
+  <div class="set-row">
+    <div class="set-label"><b>Saturday: end time {{ badge('sat_work_end') }}</b>
+      <small>Office closing time on Saturday. Default: {{ defaults.sat_work_end }}.</small></div>
+    <div class="set-ctl"><input type="time" class="form-control" name="sat_work_end" value="{{ values.sat_work_end }}" min="{{ specs.sat_work_end.lo }}" max="{{ specs.sat_work_end.hi }}" required aria-label="Saturday: end time"></div>
   </div>
   <div class="set-row">
     <div class="set-label"><b>Monthly leave limit {{ badge('monthly_leave_limit') }}</b>

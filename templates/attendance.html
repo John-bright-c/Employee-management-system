@@ -43,7 +43,7 @@
 
 <div class="panel">
   <div class="panel-head"><h2>{{ month_label }}</h2>
-    <div class="legend"><span><i class="dot-l l-green"></i>Present</span><span><i class="dot-l l-orange"></i>Late after 09:30 AM</span><span><i class="dot-l l-red"></i>Absent</span></div></div>
+    <div class="legend"><span><i class="dot-l l-green"></i>Present</span><span><i class="dot-l l-orange"></i>Late after {{ office.weekday_late }} (Sat {{ office.saturday_late }})</span><span><i class="dot-l l-red"></i>Absent</span></div></div>
   <div class="table-wrap">
     <table class="ts-table att-table">
       <thead><tr><th>Date</th><th>Day</th><th>Check In</th><th>Check Out</th><th class="num">Working Hours</th><th>Status</th></tr></thead>

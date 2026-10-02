@@ -89,7 +89,11 @@ def execute(sql, args=()):
 # ----------------------------------------------------------------------------
 SETTINGS_TTL = 20  # seconds - other server processes pick up a change within this time
 SETTING_SPECS = {
-    "late_after": dict(kind="time", default="09:30", lo="06:00", hi="14:00", label="Late check-in time"),
+    # Office timings: Mon-Fri 09:30 - 18:30, Saturday 09:00 - 18:00 (Sunday is the weekly off).
+    "late_after": dict(kind="time", default="09:30", lo="06:00", hi="14:00", label="Mon-Fri start time (late after)"),
+    "work_end": dict(kind="time", default="18:30", lo="12:00", hi="23:00", label="Mon-Fri end time"),
+    "sat_late_after": dict(kind="time", default="09:00", lo="06:00", hi="14:00", label="Saturday start time (late after)"),
+    "sat_work_end": dict(kind="time", default="18:00", lo="12:00", hi="23:00", label="Saturday end time"),
     "monthly_leave_limit": dict(kind="int", default="5", lo=1, hi=31, label="Monthly leave limit"),
     "session_idle_minutes": dict(kind="int", default=str(SESSION_IDLE_MINUTES), lo=5, hi=480, label="Session timeout"),
     "max_failed_attempts": dict(kind="int", default=str(MAX_FAILED_ATTEMPTS), lo=3, hi=10, label="Failed login attempts"),
@@ -171,6 +175,16 @@ def cfg(name):
     return _convert(name, SETTING_SPECS[name]["default"], strict=False)
 
 
+def late_after_for(d):
+    """Check-ins after this time on day d are Late: Saturday has its own start time, Mon-Fri share one."""
+    return cfg("sat_late_after") if d.weekday() == 5 else cfg("late_after")
+
+
+def clock12(t):
+    """09:30 -> '9:30 AM'"""
+    return t.strftime("%I:%M %p").lstrip("0")
+
+
 def setting_text(value):
     if isinstance(value, dtime):
         return value.strftime("%H:%M")
@@ -240,6 +254,15 @@ def role_required(role):
             return view(*args, **kwargs)
         return wrapped
     return decorator
+
+
+@app.context_processor
+def inject_office_hours():
+    """Office timings for templates, e.g. {{ office.weekday }} -> '9:30 AM - 6:30 PM'."""
+    return {"office": dict(
+        weekday=f"{clock12(cfg('late_after'))} - {clock12(cfg('work_end'))}",
+        saturday=f"{clock12(cfg('sat_late_after'))} - {clock12(cfg('sat_work_end'))}",
+        weekday_late=clock12(cfg("late_after")), saturday_late=clock12(cfg("sat_late_after")))}
 
 
 @app.context_processor
@@ -500,7 +523,7 @@ def admin_dashboard():
             "WHERE u.role='employee' AND u.is_active=1 ORDER BY (a.check_in IS NULL), a.check_in, u.full_name LIMIT 8",
             (today, today, today)):
         if r["check_in"]:
-            status = "Late" if r["check_in"].time() > cfg("late_after") else "Present"
+            status = "Late" if r["check_in"].time() > late_after_for(r["check_in"].date()) else "Present"
         else:
             status = "On Leave" if r["on_leave"] else "Not checked in"
         people.append(dict(name=r["full_name"], initials=initials(r["full_name"]), dept=r["department"] or "—",
@@ -682,7 +705,7 @@ def build_attendance(d, dept="", q=""):
     for r in rows:
         ci, co = r["check_in"], r["check_out"]
         if ci:
-            status = "Late" if ci.time() > cfg("late_after") else "Present"
+            status = "Late" if ci.time() > late_after_for(d) else "Present"
         elif d.weekday() >= 6:
             status = "Weekend"
         elif r["on_leave"]:
@@ -2041,7 +2064,7 @@ def admin_projects_import():
 # ----------------------------------------------------------------------------
 # Attendance page: monthly history, late / absent summary
 # ----------------------------------------------------------------------------
-# The "Late" check-in time is a setting now: Admin > Settings > Work & Leave.
+# Office timings (Mon-Fri 9:30-6:30, Sat 9:00-6:00) are settings: Admin > Settings > Work & Leave.
 
 
 @app.route("/employee/attendance")
@@ -2077,7 +2100,7 @@ def attendance():
         if r:
             end = r["check_out"] or (datetime.now() if d == today else None)
             mins = int((end - r["check_in"]).total_seconds() // 60) if end else 0
-            status = "Late" if r["check_in"].time() > cfg("late_after") else "Present"
+            status = "Late" if r["check_in"].time() > late_after_for(r["check_in"].date()) else "Present"
             present += 1
             late += status == "Late"
             total_min += mins
@@ -2453,11 +2476,11 @@ def admin_notifications():
         page = min(page, pages)
         rows = query_all(
             "SELECT n.ref, MIN(n.title) AS title, MIN(n.message) AS message, MAX(n.created_at) AS sent, "
-            f"COUNT(*) AS audience, COALESCE(SUM(n.is_read=1),0) AS reads {NF} WHERE {where} "
+            f"COUNT(*) AS audience, COALESCE(SUM(n.is_read=1),0) AS read_count {NF} WHERE {where} "
             "GROUP BY n.ref ORDER BY sent DESC LIMIT %s OFFSET %s",
             wargs + [ADMIN_NOTIFS_PER_PAGE, (page - 1) * ADMIN_NOTIFS_PER_PAGE])
         anns = [dict(ref=r["ref"], title=r["title"], message=r["message"], sent=r["sent"], audience=int(r["audience"]),
-                     reads=int(r["reads"]), pct=round(int(r["reads"]) * 100 / int(r["audience"]))) for r in rows]
+                     reads=int(r["read_count"]), pct=round(int(r["read_count"]) * 100 / int(r["audience"]))) for r in rows]
         ctx.update(anns=anns, total=total, page=page, pages=pages, offset=(page - 1) * ADMIN_NOTIFS_PER_PAGE,
                    args={"tab": "announcements", **({"q": f["q"]} if f["q"] else {})}, args_ns={}, counts={})
     return render_template("admin_notifications.html", **ctx)
@@ -2537,7 +2560,7 @@ def admin_notifications_cleanup():
 # Admin: settings (work & leave rules, security, organization, my account)
 # ----------------------------------------------------------------------------
 SETTINGS_SECTIONS = {
-    "work": ("late_after", "monthly_leave_limit"),
+    "work": ("late_after", "work_end", "sat_late_after", "sat_work_end", "monthly_leave_limit"),
     "security": ("session_idle_minutes", "max_failed_attempts", "lockout_minutes", "reset_token_minutes"),
     "organization": ("departments", "contact_email", "contact_phone"),
 }
